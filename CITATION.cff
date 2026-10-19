@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this code or the released folds, please cite it."
+title: "SpecTexNet: spectral-residual guided fabric defect classification with a leakage-free evaluation protocol"
+authors:
+  - alias: "CodeWithYeasin"   # replace with family-names / given-names before release
+    affiliation: "Department of CSE, BRAC University"
+version: 2.0.0
+date-released: 2026-10-19
+license: MIT
+repository-code: "https://github.com/CodeWithYeasin/FabricDefectDetection"

@@ -1,0 +1,536 @@
+%% SpecTexNet manuscript (Elsevier elsarticle; works for EAAI, ESWA, Computers in Industry, etc.)
+%% Numbers come from tables/results_macros.tex, written by scripts/aggregate.py.
+%% Red "XX" means the experiment has not been run yet. Red \todo notes mark text that must be
+%% checked against the real results before submission.
+\documentclass[preprint,12pt,authoryear]{elsarticle}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{siunitx}
+
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+\newcommand{\figorbox}[2]{\IfFileExists{#1}{\includegraphics[width=#2]{#1}}{\fbox{\parbox{#2}{\centering\textcolor{red}{Run the pipeline to create \texttt{\detokenize{#1}}}}}}}
+\newcommand{\tableor}[1]{\IfFileExists{#1}{\input{#1}}{\begin{center}\textcolor{red}{Table \texttt{\detokenize{#1}} not generated yet}\end{center}}}
+
+\InputIfFileExists{tables/results_macros.tex}{}{}
+\providecommand{\PropMacroFone}{\textcolor{red}{XX}}
+\providecommand{\PropMacroFoneStd}{\textcolor{red}{XX}}
+\providecommand{\PropMacroFoneCI}{\textcolor{red}{[XX, XX]}}
+\providecommand{\PropBAcc}{\textcolor{red}{XX}}
+\providecommand{\PropAcc}{\textcolor{red}{XX}}
+\providecommand{\PropMCC}{\textcolor{red}{XX}}
+\providecommand{\PropDDR}{\textcolor{red}{XX}}
+\providecommand{\PropFAR}{\textcolor{red}{XX}}
+\providecommand{\VoneMacroFone}{\textcolor{red}{XX}}
+\providecommand{\VoneAcc}{\textcolor{red}{XX}}
+\providecommand{\GainOverVone}{\textcolor{red}{XX}}
+\providecommand{\NRaw}{\textcolor{red}{XX}}
+\providecommand{\NClean}{\textcolor{red}{XX}}
+\providecommand{\NDupGroups}{\textcolor{red}{XX}}
+\providecommand{\NDupImages}{\textcolor{red}{XX}}
+\providecommand{\NDerived}{\textcolor{red}{XX}}
+\providecommand{\NNonPhoto}{\textcolor{red}{XX}}
+\providecommand{\NNameConflicts}{\textcolor{red}{XX}}
+\providecommand{\NCropped}{\textcolor{red}{XX}}
+\providecommand{\ShortcutMetaFone}{\textcolor{red}{XX}}
+\providecommand{\ShortcutPixFone}{\textcolor{red}{XX}}
+\providecommand{\LeakyVoneAcc}{\textcolor{red}{XX}}
+\providecommand{\LeakyVoneMacroFone}{\textcolor{red}{XX}}
+\providecommand{\FriedmanP}{\textcolor{red}{XX}}
+\providecommand{\NemenyiCD}{\textcolor{red}{XX}}
+
+\journal{Engineering Applications of Artificial Intelligence}
+
+\begin{document}
+\begin{frontmatter}
+
+\title{SpecTexNet: Spectral-residual guided attention and orientation-aware augmentation for fabric defect classification under a leakage-free evaluation protocol}
+
+\author[bracu]{Author One\corref{cor1}}
+\ead{author@example.com}
+\author[bracu]{Author Two}
+\cortext[cor1]{Corresponding author.}
+\affiliation[bracu]{organization={Department of Computer Science and Engineering, BRAC University},
+            city={Dhaka}, country={Bangladesh}}
+
+\begin{abstract}
+Automatic visual inspection of woven fabric has to recognise small, rare defects against a
+strongly periodic background, and published results on public fabric datasets are hard to compare
+because most use a single random split, report accuracy on heavily imbalanced data and do not check
+for duplicate images. We address both the model and the evaluation. On the model side we propose
+SpecTexNet, which adds a learnable multi-scale spectral-residual branch to a convolutional backbone.
+The branch suppresses the regular weave pattern in the Fourier domain and passes the remaining
+periodicity breaks to the backbone through a spectral-guided attention (SGA) module that gates
+features both spatially and per channel. Because horizontal and vertical defects swap identity
+under a quarter turn, we also introduce orientation-aware rotation augmentation (OA-Rot) and a
+matching test-time augmentation that permute these labels instead of corrupting them. On the
+evaluation side we audit the six-class Fabric Defects Dataset and find that \NDerived{} of its
+\NRaw{} files are binarised copies of other files, that some files are masks rather than photographs,
+and that defect-free and defective images come from different cameras, so that file metadata alone
+reaches \ShortcutMetaFone\% macro-F1. We group every copy with its source, remove the remaining
+duplicates with perceptual hashing, neutralise the camera shortcut, and run group-aware, stratified
+5-fold cross-validation, reporting macro-F1, balanced accuracy and MCC with bootstrap
+confidence intervals, McNemar tests and a Friedman/Nemenyi analysis. SpecTexNet with a ConvNeXt-T
+backbone reaches a macro-F1 of \PropMacroFone{}\% $\pm$ \PropMacroFoneStd{} (95\% CI
+\PropMacroFoneCI{}) and a balanced accuracy of \PropBAcc{}\%, compared with \VoneMacroFone{}\% for a
+frozen-ResNet50 gradient-boosting pipeline representative of earlier work. Ablations isolate the
+contribution of each component, and a lightweight EfficientNet-B0 variant runs on a single CPU
+core in real time. Code, splits and trained models are public.
+\end{abstract}
+
+\begin{keyword}
+Fabric defect detection \sep Textile inspection \sep Spectral residual \sep Attention \sep
+Data augmentation \sep Data leakage \sep Statistical evaluation
+\end{keyword}
+\end{frontmatter}
+
+%% ---------------------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+
+Fabric inspection is still largely manual in many mills. A human inspector looking at fabric
+moving at 15 to 20 m/min misses a substantial share of defects and tires quickly, and every
+missed defect lowers the price a roll can be sold for \citep{kumar2008survey,ngan2011review}.
+Camera-based inspection has been studied for three decades, first with hand-crafted texture
+descriptors such as Fourier analysis \citep{chan2000fourier,tsai1999directional} and Gabor filter
+banks \citep{kumar2002gabor}, and more recently with deep convolutional and transformer networks
+\citep{kahraman2023review,carrilho2024survey,li2021survey}.
+
+Two properties make fabric different from generic image classification. First, defect-free fabric
+is close to periodic. Its Fourier spectrum is dominated by a few sharp peaks at the weave
+frequencies, and a defect shows up as energy that does not fit that pattern. Classical methods
+used this directly, while ImageNet-pretrained networks have to learn it from limited data. Second,
+several defect classes are defined by orientation: a broken weft thread runs horizontally and a
+broken warp thread runs vertically. This interacts badly with rotation augmentation, which is
+otherwise one of the most useful augmentations for texture images.
+
+There is also a measurement problem. Public fabric datasets are small, imbalanced and often
+assembled from several sources. In the dataset used here, defect-free images make up roughly
+60\% of the data, so a classifier that ignores defects altogether already reaches about 60\%
+accuracy. Re-saved or resized copies of the same photograph can sit in both the training and the
+test split, which inflates the score \citep{kaufman2012leakage}. In our own earlier pipeline
+(frozen ResNet50 features with gradient-boosted trees), we found that ensemble weights had been fitted
+on training data and that reported accuracy hid per-class F1 scores as low as 0.65 for the
+minority classes. These issues are common, and they make it hard to know whether a new
+architecture actually helps.
+
+This paper makes four contributions.
+\begin{enumerate}
+\item \textbf{SpecTexNet}, a dual-branch classifier in which a learnable, multi-scale spectral
+residual (LSR) branch computes where the weave periodicity is broken, and a spectral-guided
+attention (SGA) module uses that map to gate backbone features. The branch adds about 0.4\,M
+parameters and a few milliseconds of CPU time.
+\item \textbf{Orientation-aware augmentation}. OA-Rot rotates training images by multiples of
+$90^\circ$ and swaps the horizontal and vertical labels on odd turns. OA-TTA applies the same
+permutation to predicted probabilities at test time.
+\item \textbf{A dataset audit and leakage-free protocol} for the public six-class Fabric Defects
+Dataset \citep{kaggle_fabric}. We show that binarised copies of the same photographs, masks and
+camera-specific image formats let a model score well without detecting defects, group copies with
+their sources, neutralise the camera shortcut, and evaluate with group-aware stratified folds,
+imbalance-aware metrics and paired significance tests. We release the audit and the split file so
+later work can compare on identical folds.
+\item \textbf{A controlled comparison} of SpecTexNet with eight baselines, from frozen features with
+gradient boosting to fine-tuned CNNs and vision transformers, all trained with the same recipe,
+together with ablations, calibration, efficiency measurements, explanation maps and a zero-shot
+cross-dataset test.
+\end{enumerate}
+
+%% ---------------------------------------------------------------------------
+\section{Related work}
+\label{sec:related}
+
+\paragraph{Classical fabric inspection}
+Surveys group classical methods into statistical, spectral, model-based and learning-based
+approaches \citep{kumar2008survey,ngan2011review,hanbay2016review}. Spectral methods are the closest
+to our work. \citet{chan2000fourier} used the Fourier spectrum of the fabric image to characterise
+defects, and \citet{tsai1999directional} removed the dominant frequency components of directional
+textures and reconstructed the image so that only anomalies remained. Gabor filter banks tuned to
+the weave were used for the same purpose \citep{kumar2002gabor}. These methods are fast and
+interpretable but rely on hand-set thresholds and tend to break when the weave, colour or lighting
+changes.
+
+\paragraph{Deep learning for fabric defects}
+Recent reviews \citep{kahraman2023review,carrilho2024survey,li2021survey} describe a rapid shift to
+CNN classifiers, object detectors and segmentation networks. Most classification studies fine-tune
+an ImageNet backbone such as ResNet \citep{he2016resnet}, EfficientNet \citep{tan2019efficientnet}
+or MobileNet \citep{howard2019mobilenetv3}, sometimes with added attention blocks
+\citep{hu2018se,woo2018cbam}. Anomaly-detection benchmarks such as MVTec AD
+\citep{bergmann2019mvtec} include textile-like categories but treat defects as a single anomaly
+class. \todo{Add 5 to 8 fabric-specific papers from 2023 to 2026, preferably from the target
+journal, and state in one sentence each what they do and how they evaluate (split, metric).}
+
+\paragraph{Frequency-domain neural networks}
+Several architectures use the Fourier domain inside the network. Fast Fourier Convolution
+\citep{chi2020ffc} and Global Filter Networks \citep{rao2021gfnet} mix information globally with
+learnable spectral filters, and FcaNet \citep{qin2021fcanet} uses DCT components as channel
+descriptors. These modules learn generic spectral filters. SpecTexNet instead builds on the
+spectral residual of \citet{hou2007spectral}, a saliency model whose prior (``remove the smooth
+part of the log spectrum'') matches the structure of periodic textures, and makes its smoothing
+kernel learnable.
+
+\paragraph{Symmetry and augmentation}
+Rotation-equivariant networks \citep{cohen2016gcnn} build symmetry into the architecture. When some
+labels are themselves orientation dependent, the classifier should be equivariant only up to a
+permutation of those labels. OA-Rot and OA-TTA implement this with data rather than architecture
+changes, so they work with any backbone.
+
+\paragraph{Evaluation practice}
+Data leakage through duplicates is a known problem in applied machine learning
+\citep{kaufman2012leakage}. For comparing classifiers, \citet{dietterich1998} and
+\citet{demsar2006} recommend paired tests over folds or over test examples rather than comparing
+mean accuracies. Calibration \citep{guo2017calibration} matters in inspection because a confidence
+threshold decides whether a roll is stopped.
+
+%% ---------------------------------------------------------------------------
+\section{Data and evaluation protocol}
+\label{sec:data}
+
+\subsection{Dataset}
+We use the Fabric Defects Dataset \citep{kaggle_fabric} (CC BY 4.0), which contains images of
+fabric in six classes: \emph{defect-free}, \emph{hole}, \emph{horizontal}, \emph{lines},
+\emph{stain} and \emph{vertical}. Before any training we audited every file, because the dataset
+is assembled from several sources and this is not documented on the dataset page.
+Table~\ref{tab:dataset} summarises the result.
+
+\tableor{tables/table_dataset.tex}
+
+\paragraph{Derived copies}
+In the defect folders, most photographs \texttt{N.jpg} are accompanied by three files
+\texttt{N\_processed (k).jpg} that are thresholded, binarised versions of the same photograph.
+There are also files ending in ``\texttt{ - Copy}'' or ``\texttt{(1)}''. In total \NDerived{} of the
+\NRaw{} files are derived from another file. A random split puts a photograph in the training set
+and its binarised twin in the test set, which is the main way the published accuracy of earlier
+pipelines on this dataset, including our own, was inflated (Section~\ref{sec:protocol-effect}). We
+detect these files by name, put each one in the same group as its source, and use them for
+training only. They never appear in validation or test folds, which contain only
+independent photographs.
+
+\paragraph{Non-photographs and naming conflicts}
+\NNonPhoto{} files are almost binary images (at most four grey levels) without a source photograph,
+for example line masks in the \emph{vertical} folder. They are removed. \NNameConflicts{} files carry a
+class name in their filename that disagrees with their folder (for instance files named
+\texttt{line\_\ldots} inside the \emph{hole} folder). We keep the folder label, list these files in
+the released audit, and \todo{report how many of them were relabelled after manual inspection}.
+
+\paragraph{Remaining duplicates}
+Each remaining image is described by a 64-bit DCT perceptual hash (pHash) and a 64-bit difference
+hash (dHash). Two images are linked when their MD5 checksums match, or when both Hamming distances
+are small (pHash $\le 4$ and dHash $\le 6$). Requiring both hashes keeps distinct images of plain,
+similar-looking fabric from being merged. Connected components define duplicate groups; groups
+whose members carry different labels are removed as label noise and one image per group is kept.
+\NDupImages{} images fall into \NDupGroups{} such groups, leaving \NClean{} independent images.
+\todo{Inspect 30 random pairs from \texttt{data/duplicate\_pairs.csv} by eye and report how many are
+true duplicates.}
+
+\paragraph{Source shortcuts}
+Most defect-free images are $4096\times256$ greyscale line-scan strips, while most defect images
+are $640\times360$ colour photographs or 12-megapixel phone pictures. A random forest that sees
+only width, height, aspect ratio, colour mode, file size and the number of grey levels reaches
+\ShortcutMetaFone\% macro-F1 on our folds, without looking at a single pixel of fabric. We
+therefore (i) centre-crop images whose aspect ratio exceeds 2 to a square (\NCropped{} images), so
+that strips are not recognisable by their distortion after resizing, and (ii) convert every image to
+greyscale. After these steps, a random forest on global intensity statistics of the network input
+reaches \ShortcutPixFone\% macro-F1. \todo{Interpret: the closer this is to chance (16.7\% for six
+balanced classes), the less a model can rely on the source. The ablation \emph{abl\_colour}
+measures how much colour alone inflates the CNN.}
+
+\subsection{Cross-validation}
+We use stratified group 5-fold cross-validation (StratifiedGroupKFold, seed 42), so that class
+proportions are kept and members of a duplicate group never appear in two folds. Within the four
+training folds, 10\% of the groups are held out for early stopping and checkpoint selection. The
+test fold is used only once, after training. Every model, including the re-evaluated earlier
+pipeline, uses the same fold file, which we release.
+
+\subsection{Metrics and statistics}
+Macro-F1 is the primary metric because it weights every defect type equally. We also report
+balanced accuracy (mean per-class recall), Matthews correlation coefficient, macro one-vs-rest
+AUROC, expected calibration error (ECE, 15 bins), and plain accuracy for comparison with earlier
+work. For deployment we report two binary figures obtained by merging all defect classes: the
+defect detection rate (recall on defective images) and the false alarm rate (defect-free images
+flagged as defective). Results are given as mean $\pm$ standard deviation over the five test
+folds. 95\% confidence intervals are obtained from 2000 stratified bootstrap resamples of the pooled
+out-of-fold predictions. Pairs of models are compared with an exact McNemar test on the pooled
+predictions \citep{mcnemar1947}, and all models jointly with a Friedman test and the Nemenyi
+critical difference over folds \citep{demsar2006}.
+
+%% ---------------------------------------------------------------------------
+\section{Method}
+\label{sec:method}
+
+Figure~\ref{fig:arch} gives an overview. An RGB image $x\in\mathbb{R}^{3\times H\times W}$ is
+processed by a CNN backbone that produces a feature map $F\in\mathbb{R}^{C\times h\times w}$, and
+in parallel by the spectral branch, which produces $G\in\mathbb{R}^{c\times h\times w}$. SGA
+combines the two before global pooling and classification.
+
+\begin{figure}[t]
+\centering
+\figorbox{figures/architecture.pdf}{0.95\linewidth}
+\caption{SpecTexNet. The learnable spectral residual (LSR) turns the grey-level image into
+periodicity-break maps at two scales. A light CNN encodes them into $G$, which gates the backbone
+features $F$ spatially and per channel (SGA). Pooled $F'$ and $G$ are concatenated and
+classified.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Learnable multi-scale spectral residual}
+Let $g$ be the grey-level image resized to $s\times s$ and mean-centred. To avoid the wrap-around
+discontinuity of the discrete Fourier transform, $g$ is reflect-padded by $s/8$ on each side. With
+$\mathcal{F}$ the 2-D DFT,
+\begin{align}
+A &= \log\left|\mathcal{F}(g)\right|,\qquad \Phi=\angle\,\mathcal{F}(g),\\
+R &= A - k_\theta * A,\\
+S &= \mathcal{G}_\sigma * \left|\mathcal{F}^{-1}\!\left(e^{R + i\Phi}\right)\right|^2 ,
+\end{align}
+where the convolution with $k_\theta$ is applied to the centred spectrum and $\mathcal{G}_\sigma$ is
+a Gaussian blur ($\sigma=1.5$). \citet{hou2007spectral} fix $k$ to a $3\times 3$ mean filter. We
+parameterise it as $k_\theta=\mathrm{softmax}(\theta)$ over the nine taps, initialised at
+$\theta=0$, which gives exactly the mean filter at the start of training. The softmax keeps the
+kernel positive and normalised, so $R$ stays a residual in the original sense, while gradients from
+the classification loss can change which neighbouring frequencies count as ``background''.
+
+For periodic fabric, $A$ consists of sharp weave peaks on a smooth envelope. The smooth envelope is
+removed by the subtraction, and because the peaks are also present in $k_\theta * A$ they are
+flattened. After inversion, regions that repeat the weave cancel out, and regions that break it
+(holes, broken threads, scratches) stay bright. Figure~\ref{fig:spectral} shows examples. The
+residual is computed at $s\in\{64,128\}$, because the weave pitch relative to the image size varies
+between datasets. The resulting maps are cropped back, upsampled to $112\times112$, log-compressed
+and standardised per image, so that the network sees where the saliency is concentrated rather
+than its absolute level. Stains, which change colour over a large area without breaking the weave,
+produce little spectral residual, so this class has to be recognised mostly by the backbone.
+
+\begin{figure}[t]
+\centering
+\figorbox{figures/spectral_examples.pdf}{0.9\linewidth}
+\caption{One image per class, its centred log-amplitude spectrum and the fixed spectral-residual
+saliency at two scales (the initialisation of LSR).}
+\label{fig:spectral}
+\end{figure}
+
+\subsection{Spectral encoder}
+The two saliency maps are encoded by four $3\times3$ convolution, batch-norm and SiLU blocks with
+stride 2 (widths 32, 64, 128, 128), and the output is average-pooled to the spatial size of $F$.
+The encoder has about 0.4\,M parameters.
+
+\subsection{Spectral-guided attention}
+SGA lets the spectral evidence decide which positions and channels of the backbone features to
+amplify:
+\begin{align}
+a &= \sigma\!\left(W_a\left[\,\phi(F)\,;\,G\,\right]\right)\in\mathbb{R}^{1\times h\times w},\\
+m &= \sigma\!\left(\mathrm{MLP}(\mathrm{GAP}(G))\right)\in\mathbb{R}^{C},\\
+F' &= F\odot(1+a)\odot(1+m),
+\end{align}
+where $\phi$ is a $1\times1$ convolution that reduces $F$ to 128 channels, $W_a$ is a $1\times1$
+convolution and GAP is global average pooling. The gates use the residual form $(1+\cdot)$, so
+attention can only amplify features and never removes the backbone's own evidence. The last
+layers of both gates are initialised with zero weights and bias $-2$, so that
+$a\approx m\approx 0.12$ and the network starts close to the plain backbone. The classifier
+receives $[\mathrm{GAP}(F');\mathrm{GAP}(G)]$ after layer normalisation and dropout.
+
+\subsection{Orientation-aware augmentation and test-time augmentation}
+Let $\pi$ be the permutation that swaps \emph{horizontal} and \emph{vertical} and leaves the other
+classes unchanged. OA-Rot samples horizontal and vertical flips with probability 0.5 each, which
+preserve every label, and a rotation by $k\cdot90^\circ$ with $k$ uniform in $\{0,1,2,3\}$. When $k$ is
+odd, the label $y$ is replaced by $\pi(y)$. The \emph{lines} class in this dataset contains defects
+in several directions, so it is left unchanged. At test time OA-TTA averages the softmax outputs
+over the identity, both flips and the two quarter turns, applying $\pi$ to the probability vector of
+each rotated view:
+\begin{equation}
+\hat p(x)=\frac15\Big[p(x)+p(x^{\leftrightarrow})+p(x^{\updownarrow})
++\pi\big(p(\mathrm{rot}_{90}x)\big)+\pi\big(p(\mathrm{rot}_{270}x)\big)\Big].
+\end{equation}
+Ordinary rotation augmentation without the label swap (``naive rotation'') is included in the
+ablation to measure how much the label noise costs.
+
+\subsection{Loss}
+We use the class-balanced focal loss \citep{cui2019cb,lin2017focal} with class weights
+$w_c\propto(1-\beta)/(1-\beta^{n_c})$, $\beta=0.999$, where $n_c$ is the number of training images of
+class $c$, and focusing parameter $\gamma=2$.
+
+%% ---------------------------------------------------------------------------
+\section{Experimental setup}
+\label{sec:setup}
+
+\paragraph{Baselines}
+All baselines are trained on the same folds. (i) The earlier pipeline: frozen ImageNet ResNet50
+features (2048-d) with second-order gradient-boosted trees implemented from scratch, three
+regularisation settings and a convex ensemble whose weights are fitted on the validation split; a
+single boosted model and a logistic-regression linear probe on the same features. (ii) Fine-tuned
+MobileNetV3-L \citep{howard2019mobilenetv3}, EfficientNet-B0 \citep{tan2019efficientnet}, ResNet50
+\citep{he2016resnet}, ConvNeXt-T \citep{liu2022convnext}, Swin-T \citep{liu2021swin} and DeiT-S
+\citep{touvron2021deit}. All fine-tuned baselines use exactly the recipe of SpecTexNet (loss,
+OA-Rot, OA-TTA, schedule), so differences between them come from the architecture.
+
+\paragraph{Training details}
+Images are resized to $224\times224$. Besides OA-Rot we use random resized crops with scale
+$[0.7,1]$, so that small holes are rarely cropped out, mild colour jitter and Gaussian blur. We train
+for up to 40 epochs with AdamW \citep{loshchilov2019adamw} (weight decay 0.05), batch size 32, a
+head learning rate of $10^{-3}$ and $10^{-4}$ for the pretrained backbone, two warm-up epochs
+followed by cosine decay, gradient clipping at 1.0, mixed precision and an exponential moving average
+of the weights (decay 0.998). The checkpoint with the best validation macro-F1 is kept, with
+patience 10. The implementation uses PyTorch \citep{paszke2019pytorch} and timm
+\citep{wightman2019timm}. \todo{Name the GPU and report total training time from
+\texttt{metrics.json}.}
+
+%% ---------------------------------------------------------------------------
+\section{Results}
+\label{sec:results}
+
+\subsection{Effect of the evaluation protocol}
+\label{sec:protocol-effect}
+To measure how much the evaluation protocol alone changes the numbers, we ran the earlier pipeline
+(frozen ResNet50 features, scratch gradient boosting, weighted ensemble) twice: once on a split
+that mimics the original study (random, ungrouped folds, binarised copies treated as independent
+images, colour input, no cropping) and once under our protocol. Accuracy drops from
+\LeakyVoneAcc\% to \VoneAcc\% and macro-F1 from \LeakyVoneMacroFone\% to \VoneMacroFone\%.
+\todo{One or two sentences: this gap is the size of the leakage, and it is larger than most
+architecture differences reported in the literature.}
+
+\subsection{Comparison with baselines}
+Table~\ref{tab:main} summarises the cross-validated results. SpecTexNet (ConvNeXt-T) reaches a
+macro-F1 of \PropMacroFone{}\% and a balanced accuracy of \PropBAcc{}\%. The re-evaluated earlier
+pipeline reaches \VoneMacroFone{}\% macro-F1 at \VoneAcc{}\% accuracy, a difference of
+\GainOverVone{} percentage points in macro-F1. \todo{Describe the ranking in two or three sentences:
+which family is strongest (fine-tuned CNN vs transformer), how large the gap between SpecTexNet and
+its own backbone without the spectral branch is, and whether the accuracy column tells a different
+story than macro-F1. Do not claim superiority where the McNemar p-value in
+Table~\ref{tab:mcnemar} is above 0.05.}
+
+\tableor{tables/table_main.tex}
+
+The Friedman test over folds gives $p=\FriedmanP$ and the Nemenyi critical difference is
+\NemenyiCD{} ranks (Figure~\ref{fig:cd}). \todo{State which models are not significantly different
+from SpecTexNet. With five folds, rank tests have little power, so rely on the McNemar tests and
+bootstrap intervals for pairwise claims.}
+
+\begin{figure}[t]
+\centering
+\figorbox{figures/cd_diagram.pdf}{0.8\linewidth}
+\caption{Average macro-F1 rank over folds (1 is best). Models closer than the critical difference
+(CD) are not significantly different at $\alpha=0.05$.}
+\label{fig:cd}
+\end{figure}
+
+\tableor{tables/table_mcnemar.tex}
+
+\subsection{Per-class behaviour}
+Table~\ref{tab:perclass} and Figure~\ref{fig:perclass} break the results down by class, and
+Figure~\ref{fig:cm} shows the pooled confusion matrix of SpecTexNet. \todo{Discuss the classes that
+were weakest in the earlier pipeline (hole, horizontal, vertical) and whether the spectral branch
+helps them most, as Section 4.1 predicts. Also check whether stain is the class the spectral branch
+helps least, which the method section also predicts.}
+
+\tableor{tables/table_perclass.tex}
+
+\begin{figure}[t]
+\centering
+\figorbox{figures/perclass_f1.pdf}{0.95\linewidth}
+\caption{Per-class F1 on pooled out-of-fold predictions.}
+\label{fig:perclass}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\figorbox{figures/confusion_proposed.pdf}{0.48\linewidth}\hfill
+\figorbox{figures/reliability_proposed.pdf}{0.42\linewidth}
+\caption{Left: pooled confusion matrix of SpecTexNet (ConvNeXt-T). Right: reliability diagram.}
+\label{fig:cm}
+\end{figure}
+
+\subsection{Ablation study}
+Table~\ref{tab:ablation} removes or replaces one component at a time on the ConvNeXt-T model.
+\todo{Comment on each row in one sentence. The two augmentation rows are the key test of OA-Rot:
+if naive rotation is worse than flips only, label noise from rotation is real, and if OA-Rot beats
+both, the label swap recovers the benefit of rotation.}
+
+\tableor{tables/table_ablation.tex}
+
+\subsection{Industrial operating point and calibration}
+Merging all defect types, SpecTexNet detects \PropDDR{}\% of defective images at a false alarm rate
+of \PropFAR{}\% on defect-free images. \todo{Report ECE and say whether temperature scaling on the
+validation split is needed before choosing a threshold.}
+
+\subsection{Efficiency}
+Table~\ref{tab:efficiency} lists parameters, multiply-accumulate operations and single-core CPU
+latency. The spectral branch adds about 0.4\,M parameters. Its FFTs are counted analytically,
+because the FLOP counter ignores them. \todo{Quote the latency overhead of the spectral branch
+(SpecTexNet vs. its own backbone) and the throughput of the EfficientNet-B0 variant in images per
+second.}
+
+\tableor{tables/table_efficiency.tex}
+
+\subsection{What the network looks at}
+Figure~\ref{fig:explain} shows Grad-CAM maps \citep{selvaraju2017gradcam}, the spectral saliency
+and the SGA spatial gate for correctly classified test images. \todo{Describe whether the gate and
+Grad-CAM concentrate on the defect, and include at least one failure case.}
+
+\begin{figure}[t]
+\centering
+\figorbox{figures/explain_grid.pdf}{0.85\linewidth}
+\caption{Input, Grad-CAM for the true class, spectral-residual saliency (128 px) and SGA spatial
+gate.}
+\label{fig:explain}
+\end{figure}
+
+\subsection{Cross-dataset generalisation}
+\todo{Run \texttt{scripts/cross\_dataset.py} on at least one external dataset (for example TILDA
+or AITEX \citep{silvestre2019aitex}) with the five fold models as an ensemble and no fine-tuning.
+Report binary AUROC and the aligned multi-class macro-F1 in a small table. If the drop is large,
+say so plainly; reviewers trust that more than a claim of robustness.}
+
+%% ---------------------------------------------------------------------------
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{Why a spectral prior helps}
+A pretrained CNN learns textures from ImageNet, where periodic backgrounds are rare. The spectral
+residual gives it, at almost no cost, a map of where the periodic structure is broken, which is
+close to the definition of a weaving defect. Because the map is normalised per image, its
+information lies in how concentrated the saliency is, which is also what separates a small hole
+from clean fabric. The prior is weakest when the fabric is not periodic (printed or random
+textures) or when the defect changes colour rather than structure, as with stains.
+
+\paragraph{Measurement matters}
+Re-evaluating our own earlier pipeline on leakage-free folds, with weights fitted on validation data
+and with macro-F1 as the metric, changed the picture more than any architectural change.
+\todo{Quantify: earlier reported accuracy 93.25\% on a single split vs. \VoneAcc{}\% accuracy and
+\VoneMacroFone{}\% macro-F1 under the new protocol.}
+
+\paragraph{Limitations}
+The study uses one primary dataset with six image-level classes, and after removing copies some
+defect classes have only a few dozen independent photographs, so per-class estimates for those
+classes have wide confidence intervals. It does not localise defects
+with boxes or masks, so it does not replace detection models where the defect position must be
+reported. The duplicate thresholds were chosen by inspection and could merge genuinely different
+images of very plain fabric. OA-Rot assumes that the only orientation-dependent classes are
+horizontal and vertical. For datasets with diagonal defect classes, the permutation would need to be
+extended.
+
+%% ---------------------------------------------------------------------------
+\section{Conclusion}
+\label{sec:conclusion}
+SpecTexNet adds a learnable spectral-residual branch and spectral-guided attention to a standard
+CNN, and orientation-aware augmentation makes rotation usable for direction-dependent defect
+classes. Under a de-duplicated, group-aware cross-validation protocol with imbalance-aware metrics,
+the model reaches \PropMacroFone{}\% macro-F1. The released splits, code and safetensors weights let
+others reproduce the numbers on identical folds. Future work will extend the spectral branch to
+defect localisation and evaluate it on additional fabric types.
+
+\section*{Data and code availability}
+Code, the fold file, trained weights and a live demo are available at
+\todo{GitHub URL} and \url{https://huggingface.co/spaces/codewithyeasin/fabric-defect-detection}.
+
+\section*{CRediT authorship contribution statement}
+\todo{Fill in.}
+
+\section*{Declaration of competing interest}
+The authors declare no competing interests.
+
+\bibliographystyle{elsarticle-harv}
+\bibliography{references}
+
+\end{document}

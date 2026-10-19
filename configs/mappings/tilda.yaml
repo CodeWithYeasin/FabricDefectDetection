@@ -1,0 +1,10 @@
+# TILDA-400 (Kaggle: angelolmg/tilda-400-64x64-patches) -> our classes.
+# Folder names in that release: good, hole, objects, oil spot, thread error.
+# "objects" and "thread error" have no clean counterpart, so they only enter the binary
+# (defect vs. defect-free) evaluation if you map them to some defect class. Here they are left out
+# of the multi-class part on purpose; add them under a defect class if you want them in the binary score.
+aliases:
+  good: defect_free
+  hole: hole
+  oil spot: stain
+  oil_spot: stain

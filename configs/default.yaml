@@ -1,0 +1,49 @@
+# Shared defaults. Every experiment in experiments.yaml overrides only what it changes.
+seed: 42
+classes: [defect_free, hole, horizontal, lines, stain, vertical]
+
+data:
+  splits_csv: data/splits.csv      # produced by scripts/prepare_data.py
+  img_size: 224
+  num_workers: 4
+  val_frac: 0.1                    # inner early-stopping split carved from the training folds
+  use_derived: true                # binarised "_processed" copies: training only, never val/test
+  grayscale: true                  # defect-free images are grey line-scan strips, defects are colour
+                                   # photos: colour would be a source shortcut, so every image is grey
+
+cv:
+  n_splits: 5
+  repeats: 1                       # set 2 with n_splits 2 for 5x2cv; >1 re-splits with seed+r
+
+model:
+  name: spectex_convnext_tiny
+  pretrained: true
+  drop_rate: 0.2
+  drop_path_rate: 0.1
+
+aug:
+  geo_mode: oa                     # none | flip | naive_rot | oa
+  strength: medium                 # light | medium | strong
+
+train:
+  epochs: 40
+  batch_size: 32
+  lr: 1.0e-3                       # head lr; backbone gets lr * backbone_lr_mult
+  backbone_lr_mult: 0.1
+  weight_decay: 0.05
+  warmup_epochs: 2
+  loss: cb_focal                   # ce | wce | focal | cb_focal
+  focal_gamma: 2.0
+  label_smoothing: 0.0
+  sampler_power: 0.0               # >0 enables class-rebalanced sampling
+  ema: true
+  ema_decay: 0.998
+  patience: 10
+  grad_clip: 1.0
+  channels_last: true
+  keep_ckpt: fold0                 # all | fold0 | none  (checkpoints are ~100 MB each)
+
+eval:
+  tta: oa                          # none | flip | oa
+
+output_root: results

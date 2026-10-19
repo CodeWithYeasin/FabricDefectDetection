@@ -1,0 +1,92 @@
+{
+    "test_accuracy": 0.9199029126213593,
+    "avg_confidence": 0.9080756008965721,
+    "confidence_std": 0.14892532649966864,
+    "total_samples": 412,
+    "correct_predictions": "379",
+    "misclassifications": "33",
+    "class_accuracies": {
+        "Vertical": 0.8571428571428571,
+        "defect free": 0.9642857142857143,
+        "hole": 0.7666666666666667,
+        "horizontal": 0.7037037037037037,
+        "lines": 0.8076923076923077,
+        "stain": 0.9682539682539683
+    },
+    "precision_per_class": {
+        "Vertical": 0.75,
+        "defect free": 0.9759036144578314,
+        "hole": 0.71875,
+        "horizontal": 0.9047619047619048,
+        "lines": 0.875,
+        "stain": 0.8714285714285714
+    },
+    "recall_per_class": {
+        "Vertical": 0.8571428571428571,
+        "defect free": 0.9642857142857143,
+        "hole": 0.7666666666666667,
+        "horizontal": 0.7037037037037037,
+        "lines": 0.8076923076923077,
+        "stain": 0.9682539682539683
+    },
+    "f1_per_class": {
+        "Vertical": 0.7999999999999999,
+        "defect free": 0.970059880239521,
+        "hole": 0.7419354838709677,
+        "horizontal": 0.7916666666666667,
+        "lines": 0.8400000000000001,
+        "stain": 0.9172932330827068
+    },
+    "top_misclassifications": [
+        [
+            "defect free",
+            "stain",
+            "9"
+        ],
+        [
+            "horizontal",
+            "hole",
+            "5"
+        ],
+        [
+            "hole",
+            "lines",
+            "3"
+        ],
+        [
+            "horizontal",
+            "Vertical",
+            "3"
+        ],
+        [
+            "lines",
+            "hole",
+            "3"
+        ],
+        [
+            "hole",
+            "defect free",
+            "2"
+        ],
+        [
+            "lines",
+            "defect free",
+            "2"
+        ],
+        [
+            "stain",
+            "defect free",
+            "2"
+        ],
+        [
+            "Vertical",
+            "hole",
+            "1"
+        ],
+        [
+            "Vertical",
+            "horizontal",
+            "1"
+        ]
+    ]
+}

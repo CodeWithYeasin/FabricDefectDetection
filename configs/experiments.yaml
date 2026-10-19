@@ -1,0 +1,75 @@
+# name -> overrides of default.yaml (dot-notation keys).
+# group: main (Table: comparison with baselines), ablation (Table: ablation), efficiency.
+# All fine-tuned baselines use the SAME recipe as the proposed model (loss, OA aug, TTA, schedule),
+# so differences come from the architecture.
+
+experiments:
+  # ---------------- proposed ----------------
+  spectex_convnext_tiny:
+    group: [main, ablation]
+    model.name: spectex_convnext_tiny
+    train.keep_ckpt: all          # all folds needed for cross_dataset.py
+  spectex_resnet50:
+    group: [main]
+    model.name: spectex_resnet50
+  spectex_efficientnet_b0:
+    group: [main, efficiency]
+    model.name: spectex_efficientnet_b0
+
+  # ---------------- fine-tuned baselines ----------------
+  resnet50:
+    group: [main]
+    model.name: resnet50
+  efficientnet_b0:
+    group: [main, efficiency]
+    model.name: efficientnet_b0
+  mobilenetv3_large_100:
+    group: [main, efficiency]
+    model.name: mobilenetv3_large_100
+  convnext_tiny:
+    group: [main]
+    model.name: convnext_tiny
+  swin_tiny:
+    group: [main]
+    model.name: swin_tiny_patch4_window7_224
+    model.drop_path_rate: 0.2
+  deit_small:
+    group: [main]
+    model.name: deit_small_patch16_224
+    train.lr: 5.0e-4
+
+  # ---------------- ablations (ConvNeXt-T backbone) ----------------
+  abl_no_spectral:            # backbone + same head, spectral branch removed
+    group: [ablation]
+    model.name: spectex_convnext_tiny
+    model.fusion: none
+  abl_concat_fusion:          # spectral branch on, SGA replaced by late concatenation
+    group: [ablation]
+    model.name: spectex_convnext_tiny
+    model.fusion: concat
+  abl_fixed_sr:               # Hou & Zhang fixed mean filter instead of learnable kernel
+    group: [ablation]
+    model.name: spectex_convnext_tiny
+    model.spec_learnable: false
+  abl_single_scale:
+    group: [ablation]
+    model.name: spectex_convnext_tiny
+    model.spec_scales: [64]
+  abl_aug_flip:               # no rotation at all
+    group: [ablation]
+    aug.geo_mode: flip
+    eval.tta: flip
+  abl_aug_naive_rot:          # rotation WITHOUT label swap -> label noise for H/V classes
+    group: [ablation]
+    aug.geo_mode: naive_rot
+    eval.tta: flip
+  abl_loss_ce:
+    group: [ablation]
+    train.loss: ce
+  abl_no_derived:             # drop the binarised "_processed" copies from training as well
+    group: [ablation]
+    data.use_derived: false
+  abl_colour:                 # keep RGB: measures how much the colour/source shortcut inflates scores
+    group: [ablation]
+    data.grayscale: false
+  # "w/o TTA" needs no retraining: every run also writes test_predictions_notta.csv

@@ -1,0 +1,9 @@
+{
+    "model_weights": {
+        "XGBoost": 0.4209209117330096,
+        "LightGBM": 0.4683728039015581,
+        "CatBoost": 0.11070628436543241
+    },
+    "best_validation_accuracy": 0.9356321839080459,
+    "created_at": "2025-12-05 01:42:24"
+}

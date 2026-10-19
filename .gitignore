@@ -1,0 +1,37 @@
+# data and experiment outputs (large; regenerate with the scripts)
+data/raw/
+data/synthetic/
+data/external/
+data/cache/
+data_leaky/
+results/
+*.npy
+*.npz
+*.pt
+*.pth
+*.pkl
+# keep the published split + dedup audit so others can reuse the exact folds
+!data/splits.csv
+!data/dedup_report.json
+
+# HF Space weights are pushed to the Space repo with git-lfs, not to GitHub
+deploy/hf_space/model.safetensors
+
+# LaTeX build files
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
+paper/main.pdf
+
+# Python
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+.DS_Store

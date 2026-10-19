@@ -1,0 +1,23 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  cpu-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+      - name: Unit tests
+        run: pytest -q
+      - name: End-to-end smoke run on synthetic data
+        run: |
+          python scripts/make_synthetic_data.py --out /tmp/syn --per-class 8
+          python scripts/prepare_data.py --roots /tmp/syn --out /tmp/syndata
+          python scripts/train.py --exp spectex_resnet50 --folds 0 --set data.splits_csv=/tmp/syndata/splits.csv \
+            model.name=spectex_resnet18 model.pretrained=false train.epochs=1 train.batch_size=8 \
+            data.num_workers=0 data.img_size=96 output_root=/tmp/res
